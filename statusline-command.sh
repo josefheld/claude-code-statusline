@@ -161,4 +161,12 @@ fi
 # Output style (only if not default)
 [ -n "$output_style" ] && [ "$output_style" != "default" ] && add_part "$(printf '%b%s%b' "$DIM" "$output_style" "$RST")"
 
+# Claude Code version
+claude_version=$(claude --version 2>/dev/null | head -1)
+[ -n "$claude_version" ] && add_part "$(printf '%bClaude %s%b' "$DIM" "$claude_version" "$RST")"
+
+# Codex version (if available)
+codex_version=$(codex --version 2>/dev/null | head -1)
+[ -n "$codex_version" ] && add_part "$(printf '%b%s%b' "$DIM" "$codex_version" "$RST")"
+
 printf '%b' "$parts"
