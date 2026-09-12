@@ -1,66 +1,48 @@
 # Claude Code Statusline
 
-A custom statusline script for [Claude Code](https://claude.ai/claude-code) that displays real-time session information in your terminal.
+> **Moved.** This statusline now lives in the [claude-plugins](https://github.com/josefheld/claude-plugins) marketplace as the `statusline` plugin. This repo is archived and no longer maintained, the script below is the last standalone version.
+>
+> ```
+> /plugin marketplace add josefheld/claude-plugins
+> /plugin install statusline@josefheld
+> ```
+>
+> Then let the skill set it up (`"set up my statusline"`), or run the installer once:
+>
+> ```sh
+> sh ~/.claude/plugins/marketplaces/josefheld/plugins/statusline/scripts/install-statusline.sh
+> ```
 
-Based on [danielmackay/claude-code-statusline](https://github.com/danielmackay/claude-code-statusline) with the following enhancements:
-
-- **Single `jq` call** instead of 10+ — faster rendering on every API response
-- **One-line output** — compatible with Claude Code's single-line status bar
-- **POSIX `sh`** — runs on macOS, Linux, and any shell (no bash-only features)
-- **Thinking mode & effort level** indicators
-- **Context window bar** with color-coded thresholds
-- **Both rate limits** (5h + 7d) with reset timestamps
-- **Session duration** tracker
-- **Active agent** display
-- **Session name & output style** indicators
+A custom statusline script for [Claude Code](https://claude.ai/claude-code) that displays real-time session information in your terminal: model, context window, cost, both rate limits, git state, session runtime.
 
 ![Statusline preview](screenshot.png)
 
-## What It Shows
-
 ```
-🤖 Opus 4.6 T | 🧠 ██████░░ 75% | 💰 $0.42 | ⏱️ 5h ████░░░░ 45% ↻2:30PM | 📁 my-project | 🌿 develop +3 ~5 | 🕐 01:23:45
+🤖 Opus 5 T | 🧠 ██████░░ 75% | 💰 $0.42 | ⏱️ 5h ████░░░░ 45% ↻14:30 | 📁 my-project | 🌿 main +3 ~5 | 🕐 01:23:45
 ```
 
-| Segment | Description |
-|---|---|
-| 🤖 Model | Active model + thinking mode (`T`) + effort level |
-| 🧠 Context | Context window remaining with color bar (green >50%, yellow 20-50%, red <20%) |
-| 💰 Cost | Cumulative session cost in USD |
-| ⏱️ Rate Limit | 5h/7d usage bars with percentage and reset time |
-| 📁 Folder | Git repo root name (or current directory) |
-| 🌿 Branch | Current branch + staged (`+N` green) and modified (`~N` yellow) file counts |
-| 🌳 Worktree | Active git worktree name (if any) |
-| 🕐 Duration | Session elapsed time (HH:MM:SS) |
-| ⚡ Agent | Active subagent name (if running) |
-| `[name]` | Session name (if set) |
+## Why it moved
 
-Segments only appear when they have data — no empty placeholders.
+A statusline is not a plugin component, so this could never be a plugin in the usual sense: Claude Code reads it from `statusLine` in `settings.json`, and something has to write that entry. The plugin ships an installer that does it.
 
-## Prerequisites
+What the move buys, and what this repo could not offer:
 
-- [Claude Code](https://claude.ai/claude-code) CLI installed
-- [`jq`](https://jqlang.github.io/jq/) for JSON parsing
-- `git` for branch and diff stats
+- **Updates arrive.** `settings.json` points at the script inside the plugin directory, so `claude plugin update` also updates the script. The `cp ... ~/.claude/statusline-command.sh` in the old setup below goes stale the moment anything changes here.
+- **Segments are configuration.** Which segments appear, and in which order, is `CC_STATUSLINE_SEGMENTS=model,context,cost,git` in front of the command, not a code edit. Plus bar width, the yellow and red thresholds, and the reset time format.
+- **Three bugs are fixed** that are still present in the script in this repo:
+  - `printf` and `awk` parse `62.4` through `LC_NUMERIC`. In any locale with a decimal comma (`de_AT`, `fr_FR`, ...) that is an `invalid number`, so the context bar reads `0%` in red and the cost prints `$0,42`. Fixed by exporting `LC_NUMERIC=C` while leaving `LC_CTYPE` alone, so the bar characters still render.
+  - A payload without `.rate_limits` printed a literal `null%`.
+  - `%p` is an empty string in most non-English locales, turning `2:30PM` into a bare `2:30`. The reset time is 24h by default now.
+- **A self-check.** `test-statusline.sh` asserts the segment behaviour instead of leaving it to the next session to notice.
 
-```sh
-# macOS
-brew install jq
+## The old standalone setup
 
-# Ubuntu/Debian
-apt-get install jq
-```
-
-## Setup
-
-**1. Copy the script:**
+Still works if you cloned this repo, and gets no further fixes.
 
 ```sh
 cp statusline-command.sh ~/.claude/statusline-command.sh
 chmod +x ~/.claude/statusline-command.sh
 ```
-
-**2. Add to `~/.claude/settings.json`** (global) or `.claude/settings.json` (per-project):
 
 ```json
 {
@@ -71,46 +53,8 @@ chmod +x ~/.claude/statusline-command.sh
 }
 ```
 
-**3. Start Claude Code** — the statusline appears automatically.
-
-## Customization
-
-### Color Thresholds
-
-Context window and rate limits use the same color scheme:
-
-| Color | Condition |
-|---|---|
-| 🟢 Green | < 70% used |
-| 🟡 Yellow | 70–89% used |
-| 🔴 Red | ≥ 90% used |
-
-### Available JSON Fields
-
-The script receives a JSON object on stdin from Claude Code:
-
-| Field | Description |
-|---|---|
-| `model.display_name` | Active model name |
-| `context_window.used_percentage` | Context usage (float) |
-| `context_window.remaining_percentage` | Context remaining (float) |
-| `cost.total_cost_usd` | Session cost |
-| `workspace.current_dir` | Current working directory |
-| `worktree.name` | Active worktree name |
-| `session_id` | Unique session identifier |
-| `session_name` | User-set session name |
-| `agent.name` | Active subagent name |
-| `effort_level` | Current effort setting |
-| `output_style.name` | Current output style |
-| `rate_limits.five_hour.used_percentage` | 5h rate limit usage |
-| `rate_limits.five_hour.resets_at` | 5h reset Unix timestamp |
-| `rate_limits.seven_day.used_percentage` | 7d rate limit usage |
-| `rate_limits.seven_day.resets_at` | 7d reset Unix timestamp |
-
-### Performance
-
-The script uses a single `jq` invocation with `eval` to parse all fields at once, avoiding the overhead of spawning multiple subprocesses per render cycle.
+Requires [`jq`](https://jqlang.github.io/jq/) and `git`.
 
 ## Credits
 
-Original script by [@danielmackay](https://github.com/danielmackay). Enhanced with single-parse optimization, one-line layout, thinking/effort/agent indicators, session tracking, and context bar visualization.
+Original script by [@danielmackay](https://github.com/danielmackay), see [danielmackay/claude-code-statusline](https://github.com/danielmackay/claude-code-statusline). Enhanced here with a single-parse `jq` call, one-line POSIX `sh` output, thinking mode, effort level, both rate limits with reset times, worktree, active agent and session name.
